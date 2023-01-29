@@ -24,10 +24,27 @@ namespace TaskExam
         public static List<string> GenerateWordsFromWord(string word, List<string> wordDictionary)
         {
             List<string> reuslt = new List<string>();
+            Dictionary<char, int> letters = new Dictionary<char, int>();
 
             foreach (var item in wordDictionary)
             {
-                if (IsWordCanMade(word, item))
+                bool correct = true;
+
+                ConfigureDictionary(letters, word);
+                foreach (var letter in item)
+                {
+                    if (letters.ContainsKey(letter) && letters[letter] > 0)
+                    {
+                        letters[letter]--;
+                    }
+                    else
+                    {
+                        correct = false;
+                        break;
+                    }
+                }
+
+                if (correct)
                 {
                     reuslt.Add(item);
                 }
@@ -36,45 +53,28 @@ namespace TaskExam
             return reuslt.OrderBy(w => w).ToList();
 
             // Nested Methods
-            static bool IsWordCanMade(string sourceWord, string word)
+            static void ConfigureDictionary(Dictionary<char, int> dictionary, string word)
             {
-                char[] soruceWordArray = sourceWord.ToCharArray();
+                dictionary.Clear();
 
-                foreach (var letter in word)
+                foreach (var ch in word)
                 {
-                    bool charIsFound = false;
-
-                    for (int i = 0; i < soruceWordArray.Length && !charIsFound; i++)
+                    if (dictionary.ContainsKey(ch))
                     {
-                        if (soruceWordArray[i] == letter)
-                        {
-                            soruceWordArray[i] = '\0';
-                            charIsFound = true;
-                        }
+                        dictionary[ch]++;
                     }
-
-                    if (!charIsFound) return false;
+                    else 
+                    {
+                        dictionary.Add(ch, 1);
+                    }
                 }
-
-                return true;
             }
         }
 
         /// задание 2) Два уникальных символа
         public static int MaxLengthTwoChar(string word)
         {
-            if (word.Length < 2)
-            {
-                return 0;
-            }
-
             string currentWord = word;
-
-            while (IsRepeatedInRowExist(currentWord, out char repeatedChar))
-            {
-                currentWord = DeleteChar(currentWord, ch => ch == repeatedChar);
-            }
-
 
             int maxLength = 0;
             foreach (var item in CreateUniquePairs(currentWord))
@@ -163,7 +163,7 @@ namespace TaskExam
                     {
                         (numbers[i], numbers[j]) = (numbers[j], numbers[i]);
 
-                        SortDesc(numbers, j + 1);
+                        Array.Sort(numbers, j + 1, numbers.Length - (j + 1), Comparer<int>.Create(new Comparison<int>((a, b) => b.CompareTo(a))));
 
                         if (numbers[0] == 0)
                         {
@@ -212,36 +212,11 @@ namespace TaskExam
                         throw new ArgumentException("Number can not be less than 0 or more than 9.", nameof(numbers));
                     }
 
-                    result += numbers[i] * IntPow(10, numbers.Length - i - 1);
+                    result *= 10;
+                    result += numbers[i];
                 }
 
                 return result;
-            }
-
-            static int IntPow(int x, int y)
-            {
-                int result = 1;
-
-                for (int i = 0; i < y; i++)
-                {
-                    result *= x;
-                }
-
-                return result;
-            }
-
-            static void SortDesc(int[] number, int startIndex)
-            {
-                for (int l = startIndex; l < number.Length; l++)
-                {
-                    for (int j = l + 1; j < number.Length; j++)
-                    {
-                        if (number[l] < number[j])
-                        {
-                            (number[l], number[j]) = (number[j], number[l]);
-                        }
-                    }
-                }
             }
         }
 
@@ -287,53 +262,65 @@ namespace TaskExam
             {
                 int[][] tempGrid = GetMatrix(grid.GetLength(0), grid[0].Length, -1);
 
-                Queue<Vector2> positions = new Queue<Vector2>();
-                positions.Enqueue(startPosition);
+                List<Vector2> positions = new List<Vector2> { startPosition };
                 tempGrid[(int)startPosition.Y][(int)startPosition.X] = 0;
 
-                int step = 1;
                 while (positions.Count > 0)
                 {
-                    int positionsCountInIteration = positions.Count;
+                    Vector2 stayPosition = FindMinManhattanDistance(positions, exitPosition);
+                    int currentStep = tempGrid[(int)stayPosition.Y][(int)stayPosition.X];
+                    positions.Remove(stayPosition);
 
-                    for (int i = 0; i < positionsCountInIteration; i++)
+                    for (int j = 0; j < moveDirections.Length; j++)
                     {
-                        Vector2 stayPosition = positions.Dequeue();
+                        Vector2 tempPosition = stayPosition + moveDirections[j];
 
-                        for (int j = 0; j < moveDirections.Length; j++)
+                        while (IsValidPlace(grid, tempPosition))
                         {
-                            Vector2 tempPosition = stayPosition + moveDirections[j];
-
-                            while (IsValidPlace(grid, tempPosition))
+                            int gridValue = tempGrid[(int)tempPosition.Y][(int)tempPosition.X];
+                            if (gridValue >= currentStep || gridValue == -1)
                             {
-                                int gridValue = tempGrid[(int)tempPosition.Y][(int)tempPosition.X];
-                                if (gridValue >= step || gridValue == -1)
+                                if (tempPosition == exitPosition)
                                 {
-                                    if (tempPosition == exitPosition)
-                                    {
-                                        return step;
-                                    }
-
-                                    tempGrid[(int)tempPosition.Y][(int)tempPosition.X] = step;
-                                    positions.Enqueue(tempPosition);
+                                    return currentStep + 1;
                                 }
 
-                                if (unlimitedDistance)
-                                {
-                                    tempPosition += moveDirections[j];
-                                }
-                                else
-                                {
-                                    break;
-                                }
+                                tempGrid[(int)tempPosition.Y][(int)tempPosition.X] = currentStep + 1;
+                                positions.Add(tempPosition);
+                            }
+
+                            if (unlimitedDistance)
+                            {
+                                tempPosition += moveDirections[j];
+                            }
+                            else
+                            {
+                                break;
                             }
                         }
                     }
-
-                    step++;
                 }
 
                 return -1;
+            }
+
+            static Vector2 FindMinManhattanDistance(List<Vector2> steps, Vector2 end)
+            {
+                float minDistance = int.MaxValue;
+                Vector2 nextStep = new Vector2(-1, -1);
+
+                for (int i = 0; i < steps.Count; i++)
+                {
+                    float distance = MathF.Abs(end.X - steps[i].X) + MathF.Abs(end.Y - steps[i].Y);
+
+                    if (minDistance > distance)
+                    {
+                        minDistance = distance;
+                        nextStep = steps[i];
+                    }
+                }
+
+                return nextStep;
             }
 
             static int[][] GetMatrix(int n, int m, int defaultValue = 0)
